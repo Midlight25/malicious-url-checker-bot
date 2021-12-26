@@ -4,18 +4,30 @@
 """Malicious URL Checker: A simple Discord bot that passively checks URLs
     for untrustworthy sites."""
 
+
 # Built-in Modules
+from dotenv import load_dotenv
 import logging
 from os import getenv
 from sys import exit
 from typing import Union
 
-# Third-Party Modules
-import discord
 
-from dotenv import load_dotenv
+# My Modules
+from bot import DiscordBot
+import info
+
+__author__ = info.author
+__copyright__ = info.copyright
+
+__license__ = info.license
+__version__ = info.version
+__maintainer__ = info.maintainer
+__email__ = info.email
+__status__ = info.status
 
 if __name__ == "__main__":
+
     # Discord Bot Tokens are read from an .env file
     # in the current working directory
     load_dotenv()
@@ -42,34 +54,18 @@ if __name__ == "__main__":
     logger.addHandler(console_handler)
 
     TOKEN: Union[str, None] = getenv("DISCORD_TOKEN")
+    API_KEY: Union[str, None] = getenv("API_KEY")
 
     # Quit if no token is found
     if TOKEN is None:
-        logger.critical(
-            "No env \"DISCORD_TOKEN\" was found.")
+        logger.critical("No env \"DISCORD_TOKEN\" was found.")
         exit(1)
 
-    client: discord.Client = discord.Client()
+    # Quit if no Safe Browsing API key is found
+    if API_KEY is None:
+        logger.critical("No env \"API_KEY\" was found.")
+        exit(1)
 
-    @client.event
-    async def on_ready():
-        logger.info("Discord Bot is ready to go.")
-
-    @client.event
-    async def on_message(message):
-        if message.author == client.user:
-            return
-
-        if message.content == 'raise-exception':
-            raise discord.DiscordException
-
-    @client.event
-    async def on_error(event, *args, **kwargs):
-
-        if event == "on_message":
-            logger.error(
-                f"Unhandled Message: \"{args[0].content}\" {args[0]}")
-        else:
-            raise
+    client = DiscordBot(API_KEY)
 
     client.run(TOKEN)
