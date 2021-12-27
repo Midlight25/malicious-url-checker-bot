@@ -3,9 +3,9 @@
 """Event based programming for the bot"""
 
 # System Libraries
-import json
 import logging
 import re
+from urllib.parse import quote
 
 # Third-Party Modules
 import discord
@@ -25,11 +25,11 @@ class DiscordBot(discord.Client):
     # Standard logger that all classes report to.
     LOGGER = logging.getLogger('discord').getChild('bot')
 
-    API_URL: str = r"https://safebrowsing.googleapis.com/v4/threatMatches:find"
+    API_URL: str = r"https://ipqualityscore.com/api/json/url/"
 
     def __init__(self, api_key: str):
         super().__init__()
-        self.url = f'{DiscordBot.API_URL}?key={api_key}'
+        self.url: str = DiscordBot.API_URL + api_key
 
     async def on_ready(self):
         DiscordBot.LOGGER.info("Discord Bot is ready to go.")
@@ -43,7 +43,7 @@ class DiscordBot(discord.Client):
 
         # Iterate through links found in message
         for match in matches:
-            print(self.check_url_status(match))
+            self.check_url_status(match)
 
     async def on_error(self, event, *args, **kwargs):
 
@@ -56,26 +56,17 @@ class DiscordBot(discord.Client):
     def check_url_status(self, url: str):
         """API Request to Safe Browsing API for trustworthiness"""
 
-        request_body = {
-            "client": {
-                "clientId": info.name,
-                "clientVersion": info.version
-            },
-            "threatInfo": {
-                "threatTypes": ["THREAT_TYPE_UNSPECIFIED"],
-                "platformTypes": ["PLATFORM_TYPE_UNSPECIFIED"],
-                "threatEntryTypes": ["THREAT_ENTRY_TYPE_UNSPECIFIED"],
-                "threatEntries": [
-                    {"url": url}
-                ]
-            }
-        }
+        # Change url to url encoded string
+        encoded_url: str = quote(url, safe='')
 
-        response = requests.post(
-            self.url, json=request_body)
+        # Build API call URL
+        request_url = f"{self.url}/{encoded_url}"
 
-        # response_data = json.loads(response.json())
+        print(request_url)
+        response = requests.get(request_url)
 
-        # print(response_data)
+        print(response.status_code)
+        print(response.content)
 
-        return response
+        response_data = response.json
+        print(response_data)
