@@ -9,15 +9,14 @@ import re
 from urllib.parse import quote
 
 # Third-Party Modules
-import discord
+from discord.ext import commands
+from discord import Intents, Activity, ActivityType
 import requests
 
 
-class DiscordBot(discord.Client):
+class URLBot(commands.Bot):
     """Discord Bot that scans messages for URLs and then evaluates if they
         are trustworthy"""
-
-    # TODO Change class inheritor to bot command instead of client.
 
     # Regular Expression for finding links
     URL_RE: str = r'(?:http(?:s)?:\/\/)?.(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]' + \
@@ -32,15 +31,32 @@ class DiscordBot(discord.Client):
     TAGS = ["parking", "spamming", "malware",
             "phishing", "suspicious", "adult"]
 
-    def __init__(self, api_key: str):
-        super().__init__()
+    def __init__(self, command_prefix, api_key: str):
+        """Configure the bot by passing the configs
+            to the parent class."""
+
+        # Configuring intents to filter out events
+        # that we won't process with the bot.
+        intents = Intents(messages=True, guild_messages=True,
+                          guilds=True)
+
+        # Configuring Activity
+        currently = Activity(
+            name="y'alls links",
+            type=ActivityType.watching,
+            state='Scanning',
+            details="Passively scanning messages for URLs.")
+
+        super().__init__(command_prefix=command_prefix,
+                         intents=intents, activity=currently)
+
         # Build custom URL using supplied API key
         # TODO: Convert to using POST Request instead of GET request
-        self.url: str = DiscordBot.API_URL + api_key
+        self.url: str = URLBot.API_URL + api_key
 
     async def on_ready(self):
         # TODO: Add activity update code to indicate bot readyness.
-        DiscordBot.LOGGER.info("Discord Bot is ready to go.")
+        URLBot.LOGGER.info("Discord Bot is ready to go.")
 
     async def on_message(self, message):
 
@@ -50,7 +66,7 @@ class DiscordBot(discord.Client):
             return
 
         # Scan message and check for links in message using REGEX
-        matches = re.findall(DiscordBot.URL_RE, message.content)
+        matches = re.findall(URLBot.URL_RE, message.content)
         for match in matches:
             match_info = self.get_url_info(match)
             if match_info is not None and match_info['dangerous']:
@@ -58,16 +74,16 @@ class DiscordBot(discord.Client):
 
         # TODO Make the message a rich embed instead of just text.
 
-    async def on_error(self, event, *args, **kwargs):
+    # async def on_error(self, event, *args, **kwargs):
 
-        if event == "on_message":
-            # Error triggered by on_message event.
-            # TODO: Make this more descriptive about what error occured
-            # with this message.
-            DiscordBot.LOGGER.error(
-                f"Unhandled Message: \"{args[0].content}\" {args[0]}")
-        else:
-            raise
+    #     if event == "on_message":
+    #         # Error triggered by on_message event.
+    #         # TODO: Make this more descriptive about what error occured
+    #         # with this message.
+    #         URLBot.LOGGER.error(
+    #             f"Unhandled Message: \"{args[0].content}\" {args[0]}")
+    #     else:
+    #         raise
 
     def get_url_info(self, url: str):
         """Get information about URL using API Request to Safe Browsing API
@@ -90,13 +106,8 @@ class DiscordBot(discord.Client):
                 "url": url,
                 "dangerous": url_data['unsafe'],
                 "risk_score": url_data['risk_score'],
-                "tags": []
+                "tags": [tag for tag in URLBot.TAGS if url_data[tag]]
             }
-
-            # Generatively add tags from API into object
-            for tag in DiscordBot.TAGS:
-                if url_data[tag] is True:
-                    results["tags"].append(tag)
 
             return results
         else:
