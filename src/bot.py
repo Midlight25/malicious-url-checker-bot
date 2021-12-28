@@ -6,12 +6,15 @@
 # System Libraries
 import logging
 import re
-from urllib.parse import quote
 
 # Third-Party Modules
 from discord.ext import commands
-from discord import Intents, Activity, ActivityType
+from discord import Intents, Activity, ActivityType, Embed
 import requests
+from pysafebrowsing import SafeBrowsing
+
+# My Modules
+import info
 
 
 class URLBot(commands.Bot):
@@ -25,11 +28,7 @@ class URLBot(commands.Bot):
     # Standard logger that all instances report to. 'discord:bot"
     LOGGER = logging.getLogger('discord').getChild('bot')
 
-    API_URL: str = r"https://ipqualityscore.com/api/json/url/"
-
-    # For processing API call data
-    TAGS = ["parking", "spamming", "malware",
-            "phishing", "suspicious", "adult"]
+    API_URL: str = r"https://safebrowsing.googleapis.com/v4/threatMatches:find"
 
     def __init__(self, command_prefix, api_key: str):
         """Configure the bot by passing the configs
@@ -52,7 +51,8 @@ class URLBot(commands.Bot):
 
         # Build custom URL using supplied API key
         # TODO: Convert to using POST Request instead of GET request
-        self.url: str = URLBot.API_URL + api_key
+        self.url: str = f"{URLBot.API_URL}?key={api_key}"
+        self.api = SafeBrowsing(api_key)
 
     async def on_ready(self):
         # TODO: Add activity update code to indicate bot readyness.
@@ -69,8 +69,9 @@ class URLBot(commands.Bot):
         matches = re.findall(URLBot.URL_RE, message.content)
         for match in matches:
             match_info = self.get_url_info(match)
-            if match_info is not None and match_info['dangerous']:
-                await message.channel.send(match_info)
+            # if match_info is not None and match_info['dangerous']:
+            # url_embed = self.generate_embed(match_info)
+            await message.channel.send(content=match_info)
 
         # TODO Make the message a rich embed instead of just text.
 
@@ -89,27 +90,41 @@ class URLBot(commands.Bot):
         """Get information about URL using API Request to Safe Browsing API
             and report back as object url trustworthiness"""
 
-        # Change url to url encoded string
-        encoded_url: str = quote(url, safe='')
+        url_data = self.api.lookup_url(url)
 
-        # Build API call and make call
-        # TODO: Rebuild as POST instead of GET
-        request_url = f"{self.url}/{encoded_url}"
-        response = requests.get(request_url)
+        # # Interpret Results
+        # if url_data['success']:
+        #     results = {
+        #         "url": url,
+        #         "dangerous": url_data['unsafe'],
+        #         "risk_score": url_data['risk_score'],
+        #         "tags": [tag for tag in URLBot.TAGS if url_data[tag]]
+        #     }
 
-        # Convert JSON to Python Object
-        url_data = response.json()
+        #     return results
+        # else:
+        #     # TODO Make this raise an error instead
+        #     return None
 
-        # Interpret Results
-        if url_data['success']:
-            results = {
-                "url": url,
-                "dangerous": url_data['unsafe'],
-                "risk_score": url_data['risk_score'],
-                "tags": [tag for tag in URLBot.TAGS if url_data[tag]]
-            }
+        return url_data
 
-            return results
-        else:
-            # TODO Make this raise an error instead
-            return None
+    def generate_embed(self, url_dict) -> Embed:
+        """Generate an embed from url data and return"""
+        # TODO Change url_dict to object for holding URL data.
+
+        embed = Embed(
+            title="Malicious URL Check Results",
+            description='Here are the results from our investigation.')
+
+        embed.add_field(
+            name="URL",
+            value=url_dict['url'],
+            inline=False)
+        embed.add_field(
+            name="Risk Percent",
+            value=f"{url_dict['risk_score']:0.1f} %")
+        embed.add_field(
+            name='Tags', value=", ".join(url_dict['tags']))
+        embed.set_footer(text="Definitely not provided by Google")
+
+        return embed
