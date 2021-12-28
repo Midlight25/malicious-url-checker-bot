@@ -14,7 +14,7 @@ from typing import Union
 
 
 # My Modules
-from bot import DiscordBot
+from bot import URLBot
 import info
 
 __author__ = info.author
@@ -66,6 +66,6 @@ if __name__ == "__main__":
         logger.critical("No env \"API_KEY\" was found.")
         exit(1)
 
-    client = DiscordBot(API_KEY)
+    client = URLBot(">", API_KEY)
 
     client.run(TOKEN)
