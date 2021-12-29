@@ -11,7 +11,7 @@ from typing import List
 
 # Third-Party Modules
 from discord.ext import commands
-from discord import Intents, Activity, ActivityType, Embed
+from discord import Intents, Activity, ActivityType, Embed, Color
 # import requests
 from pysafebrowsing import SafeBrowsing
 
@@ -73,13 +73,16 @@ class URLBot(commands.Bot):
 
         # Scan message and check for links in message using REGEX
         matches = re.findall(URLBot.URL_RE, message.content)
-        for match in matches:
-            match_info = self.get_url_info(match)
-            # if match_info is not None and match_info['dangerous']:
-            # url_embed = self.generate_embed(match_info)
-            await message.channel.send(content=match_info)
 
-        # TODO Make the message a rich embed instead of just text.
+        for match in matches:
+            # Query API for URL Data
+            match_info = self.get_url_info(match)
+            # If URL is bad, then get an embed representation and
+            # serve to users.
+            if match_info.malicious:
+                url_embed = self.generate_embed(match_info)
+                await message.channel.send(content=None,
+                                           embed=url_embed)
 
     # async def on_error(self, event, *args, **kwargs):
 
@@ -96,6 +99,9 @@ class URLBot(commands.Bot):
         """Get information about URL using API Request to Safe Browsing API
             and report back as object url trustworthiness"""
 
+        # TODO Add blacklist of domains that will not trigger a search
+        # TODO Add caching with timed cache
+
         response = self.api.lookup_url(url)
 
         url_data = URLData(url=url, malicious=response['malicious'])
@@ -104,27 +110,32 @@ class URLBot(commands.Bot):
             url_data.platforms = [plat.title().replace("_", " ")
                                   for plat in response['platforms']]
             url_data.tags = [threat.title().replace("_", " ")
-                            for threat in response['threats']]
+                             for threat in response['threats']]
 
         return url_data
 
-    def generate_embed(self, url_dict: URLData) -> Embed:
+    def generate_embed(self, url_data: URLData) -> Embed:
         """Generate an embed from url data and return"""
-        # TODO Change url_dict to object for holding URL data.
 
         embed = Embed(
             title="Malicious URL Check Results",
-            description='Here are the results from our investigation.')
+            description='Heads up! That URL might be potentially dangerous!',
+            url='https://developers.google.com/safe-browsing/v4/advisory',
+            color=Color.red())
 
         embed.add_field(
             name="URL",
-            value=url_dict['url'],
+            value=url_data.url,
             inline=False)
         embed.add_field(
-            name="Risk Percent",
-            value=f"{url_dict['risk_score']:0.1f} %")
+            name="Targets",
+            value=", ".join(url_data.platforms),
+            inline=False)
         embed.add_field(
-            name='Tags', value=", ".join(url_dict['tags']))
-        embed.set_footer(text="Definitely not provided by Google")
+            name='Tags',
+            value=", ".join(url_data.tags),
+            inline=False)
+
+        embed.set_footer(text="Advisory provided by Google.")
 
         return embed
